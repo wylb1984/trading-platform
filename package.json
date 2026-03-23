@@ -1,0 +1,31 @@
+{
+  "name": "global-investing-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20 <25"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "dev:lan": "next dev --hostname 0.0.0.0 --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@next/swc-wasm-nodejs": "15.2.2",
+    "@supabase/supabase-js": "2.49.1",
+    "next": "15.2.2",
+    "openai": "4.91.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.10",
+    "@types/react": "19.0.10",
+    "@types/react-dom": "19.0.4",
+    "playwright": "^1.58.2",
+    "typescript": "5.8.2"
+  }
+}
