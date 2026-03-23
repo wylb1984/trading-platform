@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getDefaultAppSettings, normalizeAppSettings } from "@/lib/settings";
 import { AppSettings, CashFlowItem, PortfolioHolding, TradeLogItem, WatchlistItem } from "@/lib/types";
 
 const dataDir = path.join(process.cwd(), "data");
@@ -23,12 +24,7 @@ const defaultStore: AppStore = {
     { symbol: "0700.HK", market: "HK", quantity: 500, averageCost: 318 },
     { symbol: "510300.SH", market: "CN", quantity: 5000, averageCost: 3.82 }
   ],
-  settings: {
-    marketDataProvider: process.env.MARKET_DATA_PROVIDER ?? "demo",
-    aiProvider: process.env.OPENAI_API_KEY ? "openai" : "rules",
-    defaultMarkets: ["US", "HK", "CN"],
-    riskProfile: "balanced"
-  },
+  settings: getDefaultAppSettings(),
   tradeLogs: [
     {
       id: "seed-aapl-buy",
@@ -132,12 +128,12 @@ export async function savePortfolioDraft(portfolioDraft: PortfolioHolding[]) {
 }
 
 export async function getSettings() {
-  return (await readStore()).settings;
+  return normalizeAppSettings((await readStore()).settings);
 }
 
 export async function saveSettings(settings: AppSettings) {
   const store = await readStore();
-  store.settings = settings;
+  store.settings = normalizeAppSettings(settings);
   await writeStore(store);
   return store.settings;
 }

@@ -19,8 +19,11 @@ create table if not exists public.app_settings (
   market_data_provider text not null,
   ai_provider text not null,
   default_markets text[] not null,
-  risk_profile text not null
+  risk_profile text not null,
+  notification_config jsonb
 );
+
+alter table public.app_settings add column if not exists notification_config jsonb;
 
 create table if not exists public.trade_logs (
   id text primary key,

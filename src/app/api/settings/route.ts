@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUserId, requiresSupabaseAuth } from "@/lib/auth";
 import { repositoryGetSettings, repositorySaveSettings } from "@/lib/repositories";
+import { normalizeAppSettings } from "@/lib/settings";
 import { AppSettings } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
@@ -16,6 +17,6 @@ export async function POST(request: NextRequest) {
   if (requiresSupabaseAuth() && !userId) {
     return NextResponse.json({ error: "authentication required" }, { status: 401 });
   }
-  const body = (await request.json()) as AppSettings;
-  return NextResponse.json(await repositorySaveSettings(body, userId));
+  const body = (await request.json()) as Partial<AppSettings>;
+  return NextResponse.json(await repositorySaveSettings(normalizeAppSettings(body), userId));
 }

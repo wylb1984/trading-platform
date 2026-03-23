@@ -166,6 +166,15 @@ export interface AppSettings {
   aiProvider: string;
   defaultMarkets: Market[];
   riskProfile: "conservative" | "balanced" | "aggressive";
+  notificationConfig: OpenClawNotificationSettings;
+}
+
+export interface OpenClawNotificationSettings {
+  enabled: boolean;
+  channel: string;
+  target: string;
+  account?: string;
+  minConfidence: number;
 }
 
 export interface WatchlistItem {

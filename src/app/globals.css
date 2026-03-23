@@ -180,6 +180,25 @@ textarea {
   margin-bottom: 12px;
 }
 
+.field-inline {
+  display: grid;
+  gap: 6px;
+}
+
+.field-inline span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.checkbox-field {
+  align-content: start;
+}
+
+.checkbox-field input {
+  width: auto;
+  justify-self: start;
+}
+
 .control,
 .wide-control {
   display: grid;
@@ -235,6 +254,16 @@ button {
   padding: 10px 14px;
   background: #eadcc8;
   color: var(--text);
+}
+
+.notification-config-card {
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.notification-config-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 10px 0 0;
 }
 
 button.secondary {
@@ -1128,6 +1157,10 @@ input {
   .mini-grid,
   .signal-boards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .notification-config-grid {
+    grid-template-columns: 1fr;
   }
 
   .market-strip,

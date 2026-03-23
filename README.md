@@ -70,6 +70,16 @@
 - 账户净值路径
 - 收益率与回撤摘要
 
+### 6. OpenClaw 通知
+
+- 支持通过 `openclaw message send` 发送盘后重要信号
+- 支持“测试通知”和“推送重要信号”
+- 自动按盘后批次去重，避免同一批结果重复提醒
+- 重要信号当前默认包括：
+  - `偏多 / 偏空` 且置信度达到阈值
+  - `反身性加强 / 反身性转空`
+  - `基本面偏强 / 基本面偏弱`
+
 ## 当前系统架构
 
 主应用：
@@ -216,7 +226,72 @@ TWELVE_DATA_API_KEY=
 ALPHA_VANTAGE_API_KEY=
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
+
+OPENCLAW_NOTIFY_ENABLED=false
+OPENCLAW_NOTIFY_ACCOUNT=
+OPENCLAW_NOTIFY_CHANNEL=
+OPENCLAW_NOTIFY_TARGET=
+OPENCLAW_NOTIFY_MIN_CONFIDENCE=60
 ```
+
+如果要启用 OpenClaw 通知：
+
+1. 本机先完成 `openclaw` 配置和消息通道登录
+2. 启动系统后，在页面里的“通知配置”中填写：
+   - `通道`
+   - `账号（可选）`
+   - `目标 ID`
+   - `最低置信度`
+   - `是否启用自动通知`
+
+环境变量仍然可以保留为默认值，但推荐通过页面配置并保存到应用设置中。若你想在首次启动前预设默认值，也可以在 `.env.local` 中配置：
+
+```bash
+OPENCLAW_NOTIFY_ENABLED=true
+OPENCLAW_NOTIFY_ACCOUNT=
+OPENCLAW_NOTIFY_CHANNEL=feishu
+OPENCLAW_NOTIFY_TARGET=<your-feishu-user-id>
+OPENCLAW_NOTIFY_MIN_CONFIDENCE=60
+OPENCLAW_NOTIFY_APP_URL=http://127.0.0.1:3000
+OPENCLAW_NOTIFY_CRON_SECRET=
+```
+
+当前支持两种触发方式：
+
+- 页面里点击“测试通知”
+- 页面里点击“推送重要信号”
+
+后端接口：
+
+- `POST /api/notifications/openclaw`
+  - `{"test": true}`：发送测试通知
+  - `{"scope": "MIXED"}`：发送当前重要信号
+- `POST /api/cron/openclaw-notify`
+  - `?scope=HKCN`：推送港股 / A 股盘后重要信号
+  - `?scope=US`：推送美股盘后重要信号
+
+## 本机自动推送
+
+如果你希望本机自动推送，而不是手动点击：
+
+1. 确保本地 Next.js 服务常驻在 `3000` 端口
+2. 在页面“通知配置”里保存好通道和目标 ID，或在 `.env.local` 里提供默认值
+3. 生成本机 `launchd` 任务：
+
+```bash
+python3 scripts/install_openclaw_notification_launchd.py
+```
+
+这会生成两个 LaunchAgent：
+
+- `ai.trading-platform.notify.hkcn`
+  - 工作日 `17:10`
+  - 推送港股 / A 股盘后重要信号
+- `ai.trading-platform.notify.us`
+  - 工作日 `06:10`
+  - 推送美股盘后重要信号
+
+再通过 `launchctl` 加载它们即可。
 
 ## 富途同步
 

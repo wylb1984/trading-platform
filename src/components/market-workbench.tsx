@@ -5,9 +5,11 @@ import { memo, useDeferredValue, useEffect, useRef, useState, useTransition } fr
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import {
+  AppSettings,
   AiBrief,
   MarketOverviewItem,
   NewsItem,
+  OpenClawNotificationSettings,
   QuoteSnapshot,
   SymbolAnalysis,
   TradingReview,
@@ -193,6 +195,16 @@ function formatMarketSentimentLabel(sentiment?: SymbolAnalysis["marketContext"][
     return "情绪偏冷";
   }
   return "情绪中性";
+}
+
+function createDefaultNotificationSettings(): OpenClawNotificationSettings {
+  return {
+    enabled: false,
+    channel: "",
+    target: "",
+    account: "",
+    minConfidence: 60
+  };
 }
 
 async function getJson<T>(input: RequestInfo, accessToken?: string | null, init?: RequestInit): Promise<T> {
@@ -455,6 +467,11 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
   const [signalsLoading, setSignalsLoading] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [openClawStatus, setOpenClawStatus] = useState<string | null>(null);
+  const [openClawSending, setOpenClawSending] = useState<null | "test" | "dispatch">(null);
+  const [notificationSettings, setNotificationSettings] = useState<OpenClawNotificationSettings>(createDefaultNotificationSettings());
+  const [notificationConfigOpen, setNotificationConfigOpen] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [pending, startTransition] = useTransition();
   const analysisCacheRef = useRef(new Map<string, SymbolAnalysis>());
   const syncPollTimerRef = useRef<number | null>(null);
@@ -618,13 +635,15 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
   useEffect(() => {
     startTransition(async () => {
       try {
-        const [overviewData, watchlistData] = await Promise.all([
+        const [overviewData, watchlistData, settingsData] = await Promise.all([
           getJson<{ items: MarketOverviewItem[] }>("/api/overview", session?.access_token),
-          getJson<{ items: WatchlistItem[] }>("/api/watchlist", session?.access_token)
+          getJson<{ items: WatchlistItem[] }>("/api/watchlist", session?.access_token),
+          getJson<AppSettings>("/api/settings", session?.access_token)
         ]);
 
         setOverview(overviewData.items);
         setWatchlist(watchlistData.items);
+        setNotificationSettings(settingsData.notificationConfig ?? createDefaultNotificationSettings());
 
         const firstSymbol = watchlistData.items[0]?.symbol ?? "";
         setSelectedSymbol((current) => current || firstSymbol);
@@ -838,6 +857,80 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
         setError(null);
       } catch (nextError) {
         setError(nextError instanceof Error ? nextError.message : "remove watchlist failed");
+      }
+    });
+  };
+
+  const sendOpenClawNotification = (mode: "test" | "dispatch") => {
+    startTransition(async () => {
+      try {
+        setOpenClawSending(mode);
+        setOpenClawStatus(null);
+        const response = await getJson<{
+          ok: boolean;
+          skipped?: boolean;
+          reason?: string;
+          important?: number;
+          sentAt?: string;
+        }>("/api/notifications/openclaw", session?.access_token, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            mode === "test"
+              ? {
+                  test: true,
+                  channel: notificationSettings.channel,
+                  target: notificationSettings.target,
+                  account: notificationSettings.account
+                }
+              : {
+                  scope: "MIXED",
+                  channel: notificationSettings.channel,
+                  target: notificationSettings.target,
+                  account: notificationSettings.account
+                }
+          )
+        });
+        if (response.skipped) {
+          setOpenClawStatus(response.reason ?? "当前没有需要发送的通知。");
+        } else if (mode === "test") {
+          setOpenClawStatus("OpenClaw 测试通知已发送。");
+        } else {
+          setOpenClawStatus(`已发送 ${response.important ?? 0} 个重要信号通知。`);
+        }
+        setError(null);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : "openclaw notify failed");
+      } finally {
+        setOpenClawSending(null);
+      }
+    });
+  };
+
+  const saveNotificationSettings = () => {
+    startTransition(async () => {
+      try {
+        setSettingsSaving(true);
+        const currentSettings = await getJson<AppSettings>("/api/settings", session?.access_token);
+        const nextSettings: AppSettings = {
+          ...currentSettings,
+          notificationConfig: {
+            ...notificationSettings,
+            minConfidence: Math.max(0, Math.min(100, Number(notificationSettings.minConfidence || 0)))
+          }
+        };
+        const saved = await getJson<AppSettings>("/api/settings", session?.access_token, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nextSettings)
+        });
+        setNotificationSettings(saved.notificationConfig);
+        setOpenClawStatus("通知配置已保存。");
+        setError(null);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : "save notification settings failed");
+      } finally {
+        setSettingsSaving(false);
       }
     });
   };
@@ -1150,16 +1243,105 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
                     <strong>今日结论</strong>
                     <p>{signalSummaryText}</p>
                   </div>
-                  <div className="signal-summary-pills">
-                    <span className={`signal-badge ${marketBullishCount >= 3 ? "signal-bull" : "signal-bear"}`}>
-                      市场环境 {marketBullishCount >= 3 ? "偏多" : "偏谨慎"}
-                    </span>
-                    <span className={`signal-badge ${supportiveFundamentalCount >= cautiousFundamentalCount ? "signal-bull" : "signal-bear"}`}>
-                      基本面 {supportiveFundamentalCount >= cautiousFundamentalCount ? "中性偏稳" : "风险增多"}
-                    </span>
-                    <span className={`signal-badge ${reflexiveBullCount >= reflexiveBearCount ? "signal-bull" : "signal-bear"}`}>
-                      反身性 {reflexiveBullCount > reflexiveBearCount ? "偏加强" : reflexiveBearCount > reflexiveBullCount ? "偏转空" : "待观察"}
-                    </span>
+                  <div>
+                    <div className="signal-summary-pills">
+                      <span className={`signal-badge ${marketBullishCount >= 3 ? "signal-bull" : "signal-bear"}`}>
+                        市场环境 {marketBullishCount >= 3 ? "偏多" : "偏谨慎"}
+                      </span>
+                      <span className={`signal-badge ${supportiveFundamentalCount >= cautiousFundamentalCount ? "signal-bull" : "signal-bear"}`}>
+                        基本面 {supportiveFundamentalCount >= cautiousFundamentalCount ? "中性偏稳" : "风险增多"}
+                      </span>
+                      <span className={`signal-badge ${reflexiveBullCount >= reflexiveBearCount ? "signal-bull" : "signal-bear"}`}>
+                        反身性 {reflexiveBullCount > reflexiveBearCount ? "偏加强" : reflexiveBearCount > reflexiveBullCount ? "偏转空" : "待观察"}
+                      </span>
+                    </div>
+                    <div className="button-row" style={{ justifyContent: "flex-end", marginTop: 8 }}>
+                      <button className="secondary" onClick={() => setNotificationConfigOpen((value) => !value)} type="button">
+                        {notificationConfigOpen ? "收起通知配置" : "通知配置"}
+                      </button>
+                      <button
+                        className="secondary"
+                        onClick={() => sendOpenClawNotification("test")}
+                        type="button"
+                        disabled={openClawSending !== null}
+                      >
+                        {openClawSending === "test" ? "发送中…" : "测试通知"}
+                      </button>
+                      <button onClick={() => sendOpenClawNotification("dispatch")} type="button" disabled={openClawSending !== null}>
+                        {openClawSending === "dispatch" ? "推送中…" : "推送重要信号"}
+                      </button>
+                    </div>
+                    {notificationConfigOpen ? (
+                      <div className="table-card notification-config-card">
+                        <div className="detail-card-header">
+                          <strong>通知配置</strong>
+                          <span className="pill">{notificationSettings.enabled ? "已启用" : "未启用"}</span>
+                        </div>
+                        <div className="controls notification-config-grid">
+                          <label className="field-inline checkbox-field">
+                            <span>启用自动通知</span>
+                            <input
+                              type="checkbox"
+                              checked={notificationSettings.enabled}
+                              onChange={(event) =>
+                                setNotificationSettings((current) => ({ ...current, enabled: event.target.checked }))
+                              }
+                            />
+                          </label>
+                          <label className="field-inline">
+                            <span>通道</span>
+                            <input
+                              value={notificationSettings.channel}
+                              onChange={(event) =>
+                                setNotificationSettings((current) => ({ ...current, channel: event.target.value }))
+                              }
+                              placeholder="feishu / openclaw-weixin"
+                            />
+                          </label>
+                          <label className="field-inline">
+                            <span>账号</span>
+                            <input
+                              value={notificationSettings.account ?? ""}
+                              onChange={(event) =>
+                                setNotificationSettings((current) => ({ ...current, account: event.target.value }))
+                              }
+                              placeholder="可留空"
+                            />
+                          </label>
+                          <label className="field-inline">
+                            <span>目标 ID</span>
+                            <input
+                              value={notificationSettings.target}
+                              onChange={(event) =>
+                                setNotificationSettings((current) => ({ ...current, target: event.target.value }))
+                              }
+                              placeholder="用户 ID / 群 ID"
+                            />
+                          </label>
+                          <label className="field-inline">
+                            <span>最低置信度</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={notificationSettings.minConfidence}
+                              onChange={(event) =>
+                                setNotificationSettings((current) => ({
+                                  ...current,
+                                  minConfidence: Number(event.target.value || 0)
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="button-row" style={{ justifyContent: "flex-end", marginTop: 10 }}>
+                          <button onClick={saveNotificationSettings} type="button" disabled={settingsSaving || openClawSending !== null}>
+                            {settingsSaving ? "保存中…" : "保存通知配置"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {openClawStatus ? <div className="footer-note compact-meta">{openClawStatus}</div> : null}
                   </div>
                 </div>
               </div>

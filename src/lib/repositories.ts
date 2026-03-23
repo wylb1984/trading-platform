@@ -1,3 +1,4 @@
+import { normalizeAppSettings, normalizeNotificationConfig } from "@/lib/settings";
 import { AppSettings, CashFlowItem, PortfolioHolding, TradeLogItem, WatchlistItem } from "@/lib/types";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import {
@@ -119,12 +120,15 @@ async function getSupabaseSettingsForUser(userId: string) {
     return null;
   }
 
-  return {
+  return normalizeAppSettings({
     marketDataProvider: data.market_data_provider as string,
     aiProvider: data.ai_provider as string,
     defaultMarkets: (data.default_markets as AppSettings["defaultMarkets"]) ?? ["US", "HK", "CN"],
-    riskProfile: (data.risk_profile as AppSettings["riskProfile"]) ?? "balanced"
-  };
+    riskProfile: (data.risk_profile as AppSettings["riskProfile"]) ?? "balanced",
+    notificationConfig: normalizeNotificationConfig(
+      (data.notification_config as AppSettings["notificationConfig"] | null) ?? undefined
+    )
+  });
 }
 
 async function putSupabaseSettingsForUser(userId: string, settings: AppSettings) {
@@ -138,13 +142,14 @@ async function putSupabaseSettingsForUser(userId: string, settings: AppSettings)
     market_data_provider: settings.marketDataProvider,
     ai_provider: settings.aiProvider,
     default_markets: settings.defaultMarkets,
-    risk_profile: settings.riskProfile
+    risk_profile: settings.riskProfile,
+    notification_config: settings.notificationConfig
   });
   if (error) {
     throw error;
   }
 
-  return settings;
+  return normalizeAppSettings(settings);
 }
 
 async function getSupabaseTradeLogsForUser(userId: string) {
