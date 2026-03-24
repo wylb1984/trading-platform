@@ -6,7 +6,9 @@ export function getDefaultNotificationConfig(): OpenClawNotificationSettings {
     account: process.env.OPENCLAW_NOTIFY_ACCOUNT ?? "",
     channel: process.env.OPENCLAW_NOTIFY_CHANNEL ?? "",
     target: process.env.OPENCLAW_NOTIFY_TARGET ?? "",
-    minConfidence: Number(process.env.OPENCLAW_NOTIFY_MIN_CONFIDENCE ?? 60)
+    minConfidence: Number(process.env.OPENCLAW_NOTIFY_MIN_CONFIDENCE ?? 60),
+    displayName: "",
+    connectedAt: ""
   };
 }
 
@@ -29,7 +31,9 @@ export function normalizeNotificationConfig(
     account: config?.account ?? defaults.account,
     channel: config?.channel ?? defaults.channel,
     target: config?.target ?? defaults.target,
-    minConfidence: Number.isFinite(config?.minConfidence) ? Number(config?.minConfidence) : defaults.minConfidence
+    minConfidence: Number.isFinite(config?.minConfidence) ? Number(config?.minConfidence) : defaults.minConfidence,
+    displayName: config?.displayName ?? defaults.displayName,
+    connectedAt: config?.connectedAt ?? defaults.connectedAt
   };
 }
 

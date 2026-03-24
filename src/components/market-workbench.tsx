@@ -472,6 +472,7 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
   const [notificationSettings, setNotificationSettings] = useState<OpenClawNotificationSettings>(createDefaultNotificationSettings());
   const [notificationConfigOpen, setNotificationConfigOpen] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [connectingChannel, setConnectingChannel] = useState<null | "feishu" | "openclaw-weixin">(null);
   const [pending, startTransition] = useTransition();
   const analysisCacheRef = useRef(new Map<string, SymbolAnalysis>());
   const syncPollTimerRef = useRef<number | null>(null);
@@ -935,6 +936,32 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
     });
   };
 
+  const connectNotificationChannel = (channel: "feishu" | "openclaw-weixin", action: "start" | "complete" | "disconnect" = "complete") => {
+    startTransition(async () => {
+      try {
+        setConnectingChannel(channel);
+        const response = await getJson<{
+          ok: boolean;
+          message: string;
+          settings?: OpenClawNotificationSettings;
+        }>("/api/notifications/openclaw/connect", session?.access_token, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel, action })
+        });
+        if (response.settings) {
+          setNotificationSettings(response.settings);
+        }
+        setOpenClawStatus(response.message);
+        setError(null);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : "connect notification channel failed");
+      } finally {
+        setConnectingChannel(null);
+      }
+    });
+  };
+
   const moveWatchlistItem = (fromSymbol: string, toSymbol: string) => {
     if (fromSymbol === toSymbol) {
       return;
@@ -1277,6 +1304,73 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
                           <strong>通知配置</strong>
                           <span className="pill">{notificationSettings.enabled ? "已启用" : "未启用"}</span>
                         </div>
+                        <div className="quote-card compact-card notification-status-card">
+                          <div>
+                            <strong>{notificationSettings.displayName || "暂未绑定通知通道"}</strong>
+                            <p>
+                              {notificationSettings.channel
+                                ? `当前通道：${notificationSettings.channel} · ${notificationSettings.connectedAt ? `绑定于 ${notificationSettings.connectedAt.slice(0, 10)}` : "已绑定"}`
+                                : "建议先连接微信或飞书，再开启自动通知。"}
+                            </p>
+                          </div>
+                          {notificationSettings.channel ? (
+                            <button
+                              className="secondary"
+                              type="button"
+                              onClick={() =>
+                                connectNotificationChannel(
+                                  notificationSettings.channel as "feishu" | "openclaw-weixin",
+                                  "disconnect"
+                                )
+                              }
+                              disabled={connectingChannel !== null}
+                            >
+                              断开
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="notification-connect-grid">
+                          <div className="detail-subcard">
+                            <div className="detail-card-header">
+                              <strong>微信</strong>
+                              <span className="pill">扫码连接</span>
+                            </div>
+                            <p className="footer-note compact-meta">点击后会拉起 OpenClaw 微信扫码，扫码完成后再点一次“完成微信连接”。</p>
+                            <div className="button-row">
+                              <button
+                                type="button"
+                                onClick={() => connectNotificationChannel("openclaw-weixin", "start")}
+                                disabled={connectingChannel !== null}
+                              >
+                                {connectingChannel === "openclaw-weixin" ? "启动中…" : "连接微信"}
+                              </button>
+                              <button
+                                className="secondary"
+                                type="button"
+                                onClick={() => connectNotificationChannel("openclaw-weixin", "complete")}
+                                disabled={connectingChannel !== null}
+                              >
+                                完成微信连接
+                              </button>
+                            </div>
+                          </div>
+                          <div className="detail-subcard">
+                            <div className="detail-card-header">
+                              <strong>飞书</strong>
+                              <span className="pill">自动识别</span>
+                            </div>
+                            <p className="footer-note compact-meta">会优先识别当前 OpenClaw 已授权的飞书账号，并自动绑定为通知接收人。</p>
+                            <div className="button-row">
+                              <button
+                                type="button"
+                                onClick={() => connectNotificationChannel("feishu", "complete")}
+                                disabled={connectingChannel !== null}
+                              >
+                                {connectingChannel === "feishu" ? "识别中…" : "连接飞书"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                         <div className="controls notification-config-grid">
                           <label className="field-inline checkbox-field">
                             <span>启用自动通知</span>
@@ -1286,36 +1380,6 @@ export function MarketWorkbench({ initialView = "home" }: { initialView?: "home"
                               onChange={(event) =>
                                 setNotificationSettings((current) => ({ ...current, enabled: event.target.checked }))
                               }
-                            />
-                          </label>
-                          <label className="field-inline">
-                            <span>通道</span>
-                            <input
-                              value={notificationSettings.channel}
-                              onChange={(event) =>
-                                setNotificationSettings((current) => ({ ...current, channel: event.target.value }))
-                              }
-                              placeholder="feishu / openclaw-weixin"
-                            />
-                          </label>
-                          <label className="field-inline">
-                            <span>账号</span>
-                            <input
-                              value={notificationSettings.account ?? ""}
-                              onChange={(event) =>
-                                setNotificationSettings((current) => ({ ...current, account: event.target.value }))
-                              }
-                              placeholder="可留空"
-                            />
-                          </label>
-                          <label className="field-inline">
-                            <span>目标 ID</span>
-                            <input
-                              value={notificationSettings.target}
-                              onChange={(event) =>
-                                setNotificationSettings((current) => ({ ...current, target: event.target.value }))
-                              }
-                              placeholder="用户 ID / 群 ID"
                             />
                           </label>
                           <label className="field-inline">

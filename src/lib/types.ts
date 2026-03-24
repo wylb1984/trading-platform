@@ -175,6 +175,8 @@ export interface OpenClawNotificationSettings {
   target: string;
   account?: string;
   minConfidence: number;
+  displayName?: string;
+  connectedAt?: string;
 }
 
 export interface WatchlistItem {
