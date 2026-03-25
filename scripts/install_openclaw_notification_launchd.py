@@ -2,14 +2,36 @@ from __future__ import annotations
 
 import plistlib
 from pathlib import Path
+import stat
 
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCH_AGENTS = Path.home() / "Library" / "LaunchAgents"
+RUNTIME_DIR = Path.home() / ".trading-platform-runtime"
+
+
+def ensure_wrapper(scope: str) -> Path:
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    wrapper = RUNTIME_DIR / f"dispatch-openclaw-notify-{scope.lower()}.sh"
+    source_script = ROOT / "scripts" / "dispatch-openclaw-notify.sh"
+    wrapper.write_text(
+        "\n".join(
+            [
+                "#!/bin/zsh",
+                "set -euo pipefail",
+                f'cd "{ROOT}"',
+                f'exec /bin/zsh "{source_script}" "{scope}"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return wrapper
 
 
 def build_plist(label: str, scope: str, hour: int, minute: int) -> dict:
-    script = ROOT / "scripts" / "dispatch-openclaw-notify.sh"
+    script = ensure_wrapper(scope)
     log_dir = ROOT / "data" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
